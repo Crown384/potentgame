@@ -6,9 +6,9 @@
   <title>Potentiometer City Driver</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="m-0 overflow-hidden bg-sky-200 font-mono text-white">
+<body class="m-0 overflow-hidden bg-sky-200 font-mono text-white" tabindex="0">
   <div class="pointer-events-none fixed inset-0 z-20">
-    <section class="pointer-events-auto absolute left-4 top-4 w-[min(92vw,400px)] rounded-2xl border border-white/20 bg-slate-950/80 p-4 shadow-2xl backdrop-blur-xl">
+    <section class="pointer-events-auto absolute left-4 top-4 w-[min(92vw,410px)] rounded-2xl border border-white/20 bg-slate-950/80 p-4 shadow-2xl backdrop-blur-xl">
       <div class="flex items-start justify-between gap-3">
         <div>
           <p class="text-[10px] font-bold uppercase tracking-[0.28em] text-cyan-300">Three.js + Cannon physics</p>
@@ -17,7 +17,7 @@
         <div id="speed" class="min-w-24 rounded-xl bg-white/10 px-3 py-2 text-right text-sm font-black">0 km/h</div>
       </div>
 
-      <div class="mt-4 grid grid-cols-3 gap-2 text-xs">
+      <div class="mt-4 grid grid-cols-4 gap-2 text-[11px]">
         <div class="rounded-xl bg-white/5 p-2">
           <span class="block text-slate-400">Steering</span>
           <span id="steeringValue" class="font-bold text-cyan-300">Keyboard</span>
@@ -30,6 +30,10 @@
           <span class="block text-slate-400">Traffic</span>
           <span id="trafficStatus" class="font-bold text-emerald-300">Yielding</span>
         </div>
+        <div class="rounded-xl bg-white/5 p-2">
+          <span class="block text-slate-400">Drive</span>
+          <span id="driveStatus" class="font-bold text-white">Idle</span>
+        </div>
       </div>
 
       <button id="connectBtn" class="mt-3 w-full rounded-xl bg-cyan-300 px-4 py-3 text-sm font-black text-slate-950 shadow-lg shadow-cyan-300/20 transition hover:bg-white">
@@ -37,9 +41,9 @@
       </button>
 
       <div class="mt-3 grid grid-cols-2 gap-2 text-[11px] text-slate-300">
-        <div class="rounded-lg border border-white/10 p-2">↑ Accelerate</div>
-        <div class="rounded-lg border border-white/10 p-2">↓ Brake / reverse</div>
-        <div class="rounded-lg border border-white/10 p-2">← → Steering</div>
+        <div class="rounded-lg border border-white/10 p-2">↑ / W Accelerate</div>
+        <div class="rounded-lg border border-white/10 p-2">↓ / S Brake then reverse</div>
+        <div class="rounded-lg border border-white/10 p-2">← → / A D Steering</div>
         <div class="rounded-lg border border-white/10 p-2">Space Handbrake</div>
         <div class="col-span-2 rounded-lg border border-white/10 p-2 text-center">R Reset vehicle</div>
       </div>
@@ -50,7 +54,7 @@
     </div>
 
     <div class="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full border border-white/20 bg-slate-950/75 px-5 py-2 text-center text-xs text-slate-200 backdrop-blur-md">
-      Camera follows from behind. Civilian traffic slows and stops for you.
+      Hold ↑ to accelerate. Hold ↓ to brake completely, then reverse.
     </div>
   </div>
 
@@ -60,11 +64,12 @@
 
     const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
     const randomRange = (min, max) => min + Math.random() * (max - min);
+
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x9ed8ff);
-    scene.fog = new THREE.FogExp2(0xa8d8ee, 0.00135);
+    scene.fog = new THREE.FogExp2(0xa8d8ee, 0.0013);
 
-    const camera = new THREE.PerspectiveCamera(64, innerWidth / innerHeight, 0.1, 2400);
+    const camera = new THREE.PerspectiveCamera(64, innerWidth / innerHeight, 0.1, 2500);
     const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
     renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
     renderer.setSize(innerWidth, innerHeight);
@@ -99,8 +104,8 @@
     const roadPhysicsMaterial = new CANNON.Material('road');
     const carPhysicsMaterial = new CANNON.Material('car');
     physicsWorld.addContactMaterial(new CANNON.ContactMaterial(roadPhysicsMaterial, carPhysicsMaterial, {
-      friction: 0.78,
-      restitution: 0.02,
+      friction: 0.82,
+      restitution: 0.01,
       contactEquationStiffness: 1e8
     }));
 
@@ -149,7 +154,7 @@
       physicsWorld.addBody(body);
     }
 
-    // Land, roads and river channel.
+    // Terrain and road network.
     addStaticBox(new THREE.Vector3(760, 8, 360), new THREE.Vector3(0, -4, -210), materials.grass);
     addStaticBox(new THREE.Vector3(760, 8, 360), new THREE.Vector3(0, -4, 210), materials.grass);
     addStaticBox(new THREE.Vector3(760, 2, 62), new THREE.Vector3(0, -8, 0), materials.rock);
@@ -168,7 +173,7 @@
       }
     }
 
-    // Bridge and stable ramps.
+    // Bridge and ramps.
     addStaticBox(new THREE.Vector3(31, 2.2, 64), new THREE.Vector3(0, 1.1, 0), materials.bridge);
     const rampAngle = 0.105;
     addStaticBox(new THREE.Vector3(31, 1.6, 25), new THREE.Vector3(0, 0.75, -43), materials.bridge, new THREE.Euler(-rampAngle, 0, 0));
@@ -190,7 +195,7 @@
     }
     for (let z = -28; z <= 28; z += 12) roadMark(0, 2.22, z, 0.34, 6);
 
-    // River.
+    // River shader.
     const riverUniforms = { time: { value: 0 } };
     const riverMaterial = new THREE.ShaderMaterial({
       transparent: true,
@@ -226,7 +231,7 @@
     river.position.y = -2.2;
     worldVisual.add(river);
 
-    // Waterfall with layered water, foam and mist.
+    // Layered waterfall and mist.
     const waterfallUniforms = { time: { value: 0 } };
     const waterfallMaterial = new THREE.ShaderMaterial({
       transparent: true,
@@ -250,39 +255,37 @@
           float streak2 = sin(vUv.x * 33.0 + vUv.y * 86.0 + time * 12.0);
           float noise = hash(floor(vec2(vUv.x * 40.0, (vUv.y - time) * 65.0)));
           float edge = smoothstep(0.0, 0.1, vUv.x) * smoothstep(1.0, 0.9, vUv.x);
-          float alpha = edge * clamp(0.48 + streak1 * 0.2 + streak2 * 0.12 + noise * 0.24, 0.0, 0.9);
-          vec3 water = mix(vec3(0.05,0.36,0.62), vec3(0.92,0.99,1.0), 0.58 + streak1 * 0.2);
-          gl_FragColor = vec4(water, alpha);
+          float alpha = edge * (0.45 + streak1 * 0.23 + streak2 * 0.12 + noise * 0.22);
+          vec3 colour = mix(vec3(0.08, 0.42, 0.67), vec3(0.92, 0.99, 1.0), 0.58 + streak1 * 0.2);
+          gl_FragColor = vec4(colour, clamp(alpha, 0.0, 0.85));
         }
       `
     });
-    const waterfall = new THREE.Mesh(new THREE.PlaneGeometry(37, 36, 30, 40), waterfallMaterial);
-    waterfall.rotation.y = Math.PI / 2;
-    waterfall.position.set(-250, 12.5, 0);
-    worldVisual.add(waterfall);
-    const waterfallBack = waterfall.clone();
-    waterfallBack.position.x -= 0.8;
-    waterfallBack.scale.set(0.93, 1, 0.93);
-    worldVisual.add(waterfallBack);
-    addStaticBox(new THREE.Vector3(24, 32, 84), new THREE.Vector3(-261, 8, 0), materials.rock);
-    for (let i = 0; i < 16; i++) {
-      addStaticRock(randomRange(2.5, 6), new THREE.Vector3(randomRange(-270, -240), randomRange(-1, 24), randomRange(-36, 36)), new THREE.Vector3(1.2, 0.8, 1));
+    for (let i = 0; i < 3; i++) {
+      const sheet = new THREE.Mesh(new THREE.PlaneGeometry(36 - i * 2, 35, 26, 36), waterfallMaterial);
+      sheet.rotation.y = Math.PI / 2;
+      sheet.position.set(-245 - i * 0.45, 12.5, 0);
+      worldVisual.add(sheet);
+    }
+    addStaticBox(new THREE.Vector3(22, 31, 82), new THREE.Vector3(-257, 7.5, 0), materials.rock);
+    for (let i = 0; i < 12; i++) {
+      addStaticRock(randomRange(2.5, 5.8), new THREE.Vector3(randomRange(-266, -238), randomRange(-1, 23), randomRange(-35, 35)), new THREE.Vector3(1.2, 0.8, 1));
     }
 
-    const foamCount = 380;
+    const foamCount = 360;
     const foamPositions = new Float32Array(foamCount * 3);
-    const foamVelocity = [];
+    const foamVelocities = [];
     for (let i = 0; i < foamCount; i++) {
-      const p = i * 3;
-      foamPositions[p] = randomRange(-252, -240);
-      foamPositions[p + 1] = randomRange(-2.4, 2.8);
-      foamPositions[p + 2] = randomRange(-19, 19);
-      foamVelocity.push(new THREE.Vector3(randomRange(-0.4, 1.8), randomRange(0.8, 4.5), randomRange(-1.6, 1.6)));
+      const i3 = i * 3;
+      foamPositions[i3] = randomRange(-249, -239);
+      foamPositions[i3 + 1] = randomRange(-2.5, 2.5);
+      foamPositions[i3 + 2] = randomRange(-18, 18);
+      foamVelocities.push(new THREE.Vector3(randomRange(-0.4, 1.8), randomRange(0.8, 4.2), randomRange(-1.7, 1.7)));
     }
     const foamGeometry = new THREE.BufferGeometry();
     foamGeometry.setAttribute('position', new THREE.BufferAttribute(foamPositions, 3));
     const foam = new THREE.Points(foamGeometry, new THREE.PointsMaterial({
-      color: 0xecfcff,
+      color: 0xeafcff,
       size: 1.25,
       transparent: true,
       opacity: 0.58,
@@ -294,112 +297,115 @@
     function updateFoam(dt) {
       const positions = foamGeometry.attributes.position.array;
       for (let i = 0; i < foamCount; i++) {
-        const p = i * 3;
-        const velocity = foamVelocity[i];
-        positions[p] += velocity.x * dt;
-        positions[p + 1] += velocity.y * dt;
-        positions[p + 2] += velocity.z * dt;
-        velocity.y -= 2.7 * dt;
-        if (positions[p + 1] < -2.8 || positions[p] > -234) {
-          positions[p] = randomRange(-252, -243);
-          positions[p + 1] = randomRange(-2.2, 0.7);
-          positions[p + 2] = randomRange(-18, 18);
-          velocity.set(randomRange(0.1, 2), randomRange(1.2, 4.7), randomRange(-1.7, 1.7));
+        const i3 = i * 3;
+        const velocity = foamVelocities[i];
+        positions[i3] += velocity.x * dt;
+        positions[i3 + 1] += velocity.y * dt;
+        positions[i3 + 2] += velocity.z * dt;
+        velocity.y -= 2.5 * dt;
+        if (positions[i3 + 1] < -2.8 || positions[i3] > -232) {
+          positions[i3] = randomRange(-249, -241);
+          positions[i3 + 1] = randomRange(-2.3, 0.8);
+          positions[i3 + 2] = randomRange(-17, 17);
+          velocity.set(randomRange(0.1, 2), randomRange(1.2, 4.7), randomRange(-1.8, 1.8));
         }
       }
       foamGeometry.attributes.position.needsUpdate = true;
     }
 
-    // Skyscrapers.
+    // Procedural skyscrapers with solid collision boxes.
     function windowTexture(seed) {
       const canvas = document.createElement('canvas');
       canvas.width = 128;
       canvas.height = 256;
-      const context = canvas.getContext('2d');
-      context.fillStyle = '#17212b';
-      context.fillRect(0, 0, 128, 256);
-      for (let y = 8; y < 250; y += 16) {
-        for (let x = 7; x < 124; x += 15) {
-          const lit = Math.sin(x * 9.2 + y * 4.7 + seed) > -0.18;
-          context.fillStyle = lit ? (Math.random() > 0.35 ? '#f1d58c' : '#7ed8ff') : '#263442';
-          context.fillRect(x, y, 8, 9);
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#18212b';
+      ctx.fillRect(0, 0, 128, 256);
+      for (let y = 8; y < 248; y += 16) {
+        for (let x = 7; x < 122; x += 15) {
+          ctx.fillStyle = Math.sin(x * 12.93 + y * 4.17 + seed) > -0.2 ? '#f3dc9a' : '#263747';
+          ctx.fillRect(x, y, 8, 9);
         }
       }
       const texture = new THREE.CanvasTexture(canvas);
       texture.colorSpace = THREE.SRGBColorSpace;
       return texture;
     }
-    const buildingTextures = Array.from({ length: 6 }, (_, index) => windowTexture(index * 19));
+    const buildingTextures = Array.from({ length: 6 }, (_, index) => windowTexture(index * 21));
 
     function addBuilding(x, z, width, depth, height, colour, textureIndex) {
-      const texture = buildingTextures[textureIndex % buildingTextures.length];
       const material = new THREE.MeshStandardMaterial({
         color: colour,
-        map: texture,
+        map: buildingTextures[textureIndex % buildingTextures.length],
         emissive: new THREE.Color(0x203447),
-        emissiveMap: texture,
-        emissiveIntensity: 0.22,
-        roughness: 0.68,
-        metalness: 0.18
+        emissiveIntensity: 0.18,
+        roughness: 0.72,
+        metalness: 0.15
       });
       addStaticBox(new THREE.Vector3(width, height, depth), new THREE.Vector3(x, height / 2, z), material);
-      if (height > 70) {
-        addMesh(new THREE.BoxGeometry(width * 0.42, 4, depth * 0.42), materials.rail, new THREE.Vector3(x, height + 2, z));
+    }
+
+    const buildingColours = [0x76889a, 0x9a796d, 0x667383, 0x8f98a1, 0x705f7f, 0x537080];
+    let buildingIndex = 0;
+    for (const z of [-285, -205, -45, 45, 205, 285]) {
+      for (const x of [-290, -220, -150, -80, 80, 150, 220, 290]) {
+        if (Math.abs(z) < 65 && x < -205) continue;
+        const width = randomRange(30, 48);
+        const depth = randomRange(30, 48);
+        const height = randomRange(38, 135);
+        addBuilding(x, z, width, depth, height, buildingColours[buildingIndex % buildingColours.length], buildingIndex);
+        buildingIndex++;
       }
     }
 
-    const buildingColours = [0x71849a, 0x8a6f74, 0x687681, 0x556b7a, 0x8b816e, 0x6f7088];
-    const blocks = [
-      [-80, -250], [-150, -250], [90, -250], [165, -250],
-      [-85, -165], [-165, -165], [90, -165], [170, -165],
-      [-85, 165], [-165, 165], [90, 165], [170, 165],
-      [-80, 250], [-155, 250], [90, 250], [165, 250],
-      [-255, -180], [255, -180], [-255, 185], [255, 185]
-    ];
-    blocks.forEach(([x, z], index) => {
-      addBuilding(x, z, randomRange(30, 48), randomRange(34, 52), randomRange(45, 130), buildingColours[index % buildingColours.length], index);
-    });
-
-    // Trees and solid rocks.
-    function addTree(x, z) {
-      addMesh(new THREE.CylinderGeometry(0.45, 0.7, 6, 8), materials.trunk, new THREE.Vector3(x, 3, z));
-      addMesh(new THREE.ConeGeometry(3.3, 7, 10), materials.leaf, new THREE.Vector3(x, 8.2, z));
+    // Trees, rocks and street furniture.
+    function addTree(x, z, scale = 1) {
+      addStaticBox(new THREE.Vector3(0.9 * scale, 6 * scale, 0.9 * scale), new THREE.Vector3(x, 3 * scale, z), materials.trunk);
+      addMesh(new THREE.ConeGeometry(3.8 * scale, 9 * scale, 9), materials.leaf, new THREE.Vector3(x, 10 * scale, z));
     }
-    for (let z = -330; z <= 330; z += 38) {
-      if (Math.abs(z) > 60) {
-        addTree(-24, z);
-        addTree(24, z + 12);
-      }
+    for (let i = 0; i < 28; i++) {
+      const x = randomRange(-330, 330);
+      const z = randomRange(-330, 330);
+      if (Math.abs(x) > 25 && Math.abs(z - 120) > 25 && Math.abs(z + 120) > 25) addTree(x, z, randomRange(0.75, 1.25));
     }
     const rockPositions = [
-      [-74, -74, 4], [78, -72, 5], [-88, 78, 4.5], [94, 76, 5],
-      [-150, -150, 4.2], [145, 160, 5.6], [-205, 72, 6], [210, -70, 5.2]
+      [-82, -78, 4.2], [76, -72, 5.5], [-94, 82, 4.8], [95, 73, 5.2],
+      [-150, -155, 4.4], [145, 165, 5.8], [-200, 75, 6.2], [210, -72, 5.5]
     ];
-    rockPositions.forEach(([x, z, radius]) => addStaticRock(radius, new THREE.Vector3(x, radius * 0.72, z), new THREE.Vector3(1.2, 0.82, 1)));
+    for (const [x, z, radius] of rockPositions) addStaticRock(radius, new THREE.Vector3(x, radius * 0.72, z), new THREE.Vector3(1.25, 0.8, 1));
 
     function addStreetLight(x, z) {
-      addMesh(new THREE.CylinderGeometry(0.16, 0.24, 8, 8), materials.rail, new THREE.Vector3(x, 4, z));
-      const lamp = new THREE.MeshStandardMaterial({ color: 0xffe7b3, emissive: 0xffcc72, emissiveIntensity: 2.1 });
-      addMesh(new THREE.SphereGeometry(0.5, 12, 8), lamp, new THREE.Vector3(x, 8.2, z));
+      addMesh(new THREE.CylinderGeometry(0.16, 0.25, 8, 8), materials.rail, new THREE.Vector3(x, 4, z));
+      addMesh(new THREE.SphereGeometry(0.5, 12, 8), new THREE.MeshStandardMaterial({
+        color: 0xffe4a6,
+        emissive: 0xffcc72,
+        emissiveIntensity: 2.2
+      }), new THREE.Vector3(x, 8.2, z));
     }
-    for (let z = -330; z <= 330; z += 46) {
+    for (let z = -330; z <= 330; z += 45) {
       if (Math.abs(z) > 58) {
-        addStreetLight(-19.5, z);
-        addStreetLight(19.5, z);
+        addStreetLight(-19, z);
+        addStreetLight(19, z);
       }
     }
 
     function createCarModel(colour = 0xe31e36, traffic = false) {
       const group = new THREE.Group();
-      const paint = new THREE.MeshPhysicalMaterial({ color: colour, metalness: 0.62, roughness: 0.24, clearcoat: 1, clearcoatRoughness: 0.18 });
+      const paint = new THREE.MeshPhysicalMaterial({
+        color: colour,
+        metalness: 0.62,
+        roughness: 0.24,
+        clearcoat: 1,
+        clearcoatRoughness: 0.18
+      });
       const trim = new THREE.MeshStandardMaterial({ color: 0x101419, metalness: 0.6, roughness: 0.38 });
       const glass = new THREE.MeshPhysicalMaterial({ color: 0x6ca5c5, roughness: 0.08, transparent: true, opacity: 0.68 });
-      const frontLight = new THREE.MeshStandardMaterial({ color: 0xeaf8ff, emissive: 0xbceaff, emissiveIntensity: 2.1 });
+      const frontLight = new THREE.MeshStandardMaterial({ color: 0xe8f7ff, emissive: 0xbceaff, emissiveIntensity: 2.1 });
       const rearLight = new THREE.MeshStandardMaterial({ color: 0xff2438, emissive: 0xff1228, emissiveIntensity: 1.7 });
 
-      const base = addMesh(new THREE.BoxGeometry(2.25, 0.62, 4.6), paint, new THREE.Vector3(0, 0.2, 0), new THREE.Euler(), group);
-      const hood = addMesh(new THREE.BoxGeometry(2.04, 0.34, 1.45), paint, new THREE.Vector3(0, 0.66, -1.46), new THREE.Euler(-0.06, 0, 0), group);
-      const cabin = addMesh(new THREE.BoxGeometry(1.8, 0.82, 1.92), glass, new THREE.Vector3(0, 1.03, 0.18), new THREE.Euler(), group);
+      addMesh(new THREE.BoxGeometry(2.25, 0.62, 4.6), paint, new THREE.Vector3(0, 0.2, 0), new THREE.Euler(), group);
+      addMesh(new THREE.BoxGeometry(2.04, 0.34, 1.45), paint, new THREE.Vector3(0, 0.66, -1.46), new THREE.Euler(-0.06, 0, 0), group);
+      addMesh(new THREE.BoxGeometry(1.8, 0.82, 1.92), glass, new THREE.Vector3(0, 1.03, 0.18), new THREE.Euler(), group);
       addMesh(new THREE.BoxGeometry(1.64, 0.16, 1.3), paint, new THREE.Vector3(0, 1.5, 0.22), new THREE.Euler(), group);
       addMesh(new THREE.BoxGeometry(2.17, 0.25, 0.23), trim, new THREE.Vector3(0, 0.06, -2.35), new THREE.Euler(), group);
       addMesh(new THREE.BoxGeometry(2.17, 0.25, 0.23), trim, new THREE.Vector3(0, 0.06, 2.35), new THREE.Euler(), group);
@@ -416,9 +422,10 @@
       for (const x of [-1.08, 1.08]) {
         for (const z of [-1.48, 1.48]) {
           const wheel = new THREE.Group();
-          const tyre = new THREE.Mesh(new THREE.CylinderGeometry(0.47, 0.47, 0.34, 20).rotateZ(Math.PI / 2), tyreMaterial);
-          const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.23, 0.23, 0.36, 14).rotateZ(Math.PI / 2), hubMaterial);
-          wheel.add(tyre, hub);
+          wheel.add(
+            new THREE.Mesh(new THREE.CylinderGeometry(0.47, 0.47, 0.34, 20).rotateZ(Math.PI / 2), tyreMaterial),
+            new THREE.Mesh(new THREE.CylinderGeometry(0.23, 0.23, 0.36, 14).rotateZ(Math.PI / 2), hubMaterial)
+          );
           wheel.position.set(x, -0.2, z);
           group.add(wheel);
         }
@@ -433,22 +440,25 @@
       return group;
     }
 
-    // Stable player physics: real collisions, gravity and friction, but roll/pitch are locked.
+    // Stable player body. Rotation is controlled manually, so it cannot tip over.
     const playerBody = new CANNON.Body({
-      mass: 1200,
+      mass: 1050,
       material: carPhysicsMaterial,
-      linearDamping: 0.18,
-      angularDamping: 0.9
+      linearDamping: 0.08,
+      angularDamping: 1
     });
     playerBody.addShape(new CANNON.Box(new CANNON.Vec3(1.08, 0.52, 2.25)), new CANNON.Vec3(0, -0.15, 0));
     playerBody.position.set(5.8, 2.4, -255);
-    playerBody.angularFactor.set(0, 1, 0);
+    playerBody.fixedRotation = true;
+    playerBody.updateMassProperties();
     playerBody.allowSleep = false;
     physicsWorld.addBody(playerBody);
+
     const playerModel = createCarModel(0xe31e36);
     let playerYaw = 0;
+    let driveSpeed = 0;
 
-    // Traffic cars are kinematic but now behave like careful civilians.
+    // Careful civilian traffic.
     const trafficCars = [];
     const trafficColours = [0x1976d2, 0xf2b705, 0x16a085, 0xf1f3f5, 0x6f42c1, 0x252a34, 0xe85d3f];
 
@@ -483,9 +493,9 @@
     }
 
     function safeSpeedForGap(gap, baseSpeed) {
-      if (gap <= 8) return 0;
-      if (gap >= 30) return baseSpeed;
-      return baseSpeed * ((gap - 8) / 22);
+      if (gap <= 9) return 0;
+      if (gap >= 32) return baseSpeed;
+      return baseSpeed * ((gap - 9) / 23);
     }
 
     function playerGapAhead(car) {
@@ -518,12 +528,13 @@
         const playerGap = playerGapAhead(car);
         const vehicleGap = trafficGapAhead(car);
         let targetSpeed = car.baseSpeed;
-        if (playerGap > 0 && playerGap < 34) targetSpeed = Math.min(targetSpeed, safeSpeedForGap(playerGap, car.baseSpeed));
-        if (vehicleGap > 0 && vehicleGap < 30) targetSpeed = Math.min(targetSpeed, safeSpeedForGap(vehicleGap, car.baseSpeed));
+        if (playerGap > 0 && playerGap < 36) targetSpeed = Math.min(targetSpeed, safeSpeedForGap(playerGap, car.baseSpeed));
+        if (vehicleGap > 0 && vehicleGap < 32) targetSpeed = Math.min(targetSpeed, safeSpeedForGap(vehicleGap, car.baseSpeed));
         if (targetSpeed < car.baseSpeed * 0.35) yieldingCount++;
-        const response = targetSpeed < car.currentSpeed ? 5.5 : 1.5;
+
+        const response = targetSpeed < car.currentSpeed ? 6 : 1.5;
         car.currentSpeed += (targetSpeed - car.currentSpeed) * Math.min(1, dt * response);
-        if (targetSpeed === 0 && car.currentSpeed < 0.2) car.currentSpeed = 0;
+        if (targetSpeed === 0 && car.currentSpeed < 0.18) car.currentSpeed = 0;
 
         if (car.route === 'vertical') {
           const laneX = car.direction > 0 ? -6.4 : 6.4;
@@ -555,7 +566,7 @@
       document.getElementById('trafficStatus').textContent = yieldingCount > 0 ? `${yieldingCount} stopped` : 'Yielding';
     }
 
-    // Pedestrians walk on sidewalks.
+    // Pedestrians.
     const pedestrians = [];
     const skinColours = [0x7a4c2f, 0x9b6847, 0xc58b64, 0x5c3826, 0xd6a27e];
     const clothingColours = [0x2364aa, 0xe4572e, 0x25a18e, 0x6a4c93, 0xf3a712, 0x202c59];
@@ -615,8 +626,30 @@
       });
     }
 
-    // Controls and Arduino.
-    const keys = new Set();
+    // Reliable keyboard state. Both event.key and event.code are supported.
+    const controls = { up: false, down: false, left: false, right: false, handbrake: false };
+
+    function updateKeyState(event, pressed) {
+      const key = event.key.toLowerCase();
+      const code = event.code;
+      let handled = true;
+      if (key === 'arrowup' || key === 'w' || code === 'ArrowUp' || code === 'KeyW') controls.up = pressed;
+      else if (key === 'arrowdown' || key === 's' || code === 'ArrowDown' || code === 'KeyS') controls.down = pressed;
+      else if (key === 'arrowleft' || key === 'a' || code === 'ArrowLeft' || code === 'KeyA') controls.left = pressed;
+      else if (key === 'arrowright' || key === 'd' || code === 'ArrowRight' || code === 'KeyD') controls.right = pressed;
+      else if (key === ' ' || code === 'Space') controls.handbrake = pressed;
+      else handled = false;
+      if (handled) event.preventDefault();
+      if (pressed && (key === 'r' || code === 'KeyR')) resetPlayer();
+    }
+
+    addEventListener('keydown', (event) => updateKeyState(event, true), { passive: false });
+    addEventListener('keyup', (event) => updateKeyState(event, false), { passive: false });
+    addEventListener('blur', () => {
+      controls.up = controls.down = controls.left = controls.right = controls.handbrake = false;
+    });
+    document.body.focus();
+
     let serialPort = null;
     let serialConnected = false;
     let potentiometerRaw = 512;
@@ -625,14 +658,8 @@
     const steeringElement = document.getElementById('steeringValue');
     const serialStatus = document.getElementById('serialStatus');
     const connectButton = document.getElementById('connectBtn');
+    const driveStatus = document.getElementById('driveStatus');
     const impactElement = document.getElementById('impact');
-
-    addEventListener('keydown', (event) => {
-      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(event.code)) event.preventDefault();
-      keys.add(event.code);
-      if (event.code === 'KeyR') resetPlayer();
-    });
-    addEventListener('keyup', (event) => keys.delete(event.code));
 
     async function connectArduino() {
       if (!('serial' in navigator)) {
@@ -648,6 +675,7 @@
         connectButton.textContent = 'ARDUINO CONNECTED';
         connectButton.disabled = true;
         connectButton.classList.add('opacity-70');
+
         const decoder = new TextDecoderStream();
         serialPort.readable.pipeTo(decoder.writable).catch(() => {});
         const reader = decoder.readable.getReader();
@@ -682,8 +710,9 @@
     let impactTimer = 0;
     playerBody.addEventListener('collide', (event) => {
       const impact = Math.abs(event.contact.getImpactVelocityAlongNormal());
-      if (impact > 4.5) {
-        impactElement.textContent = impact > 10 ? 'HEAVY IMPACT' : 'IMPACT';
+      if (impact > 3.5) {
+        driveSpeed *= impact > 9 ? 0.08 : 0.35;
+        impactElement.textContent = impact > 9 ? 'HEAVY IMPACT' : 'IMPACT';
         impactElement.classList.remove('hidden');
         impactTimer = 0.7;
       }
@@ -694,62 +723,58 @@
       playerBody.velocity.setZero();
       playerBody.angularVelocity.setZero();
       playerYaw = 0;
+      driveSpeed = 0;
       playerBody.quaternion.setFromEuler(0, playerYaw, 0);
       playerBody.wakeUp();
     }
 
-    function horizontalSpeed() {
-      return Math.hypot(playerBody.velocity.x, playerBody.velocity.z);
-    }
-
     function updatePlayerControls(dt) {
-      const keyboardSteer = (keys.has('ArrowLeft') ? -1 : 0) + (keys.has('ArrowRight') ? 1 : 0);
+      // Explicit speed model: up accelerates; down brakes first, then reverses.
+      if (controls.up && !controls.down) {
+        driveSpeed += 17 * dt;
+        driveStatus.textContent = 'Accelerating';
+        driveStatus.className = 'font-bold text-emerald-300';
+      } else if (controls.down && !controls.up) {
+        if (driveSpeed > 0.3) {
+          driveSpeed = Math.max(0, driveSpeed - 30 * dt);
+          driveStatus.textContent = 'Braking';
+          driveStatus.className = 'font-bold text-amber-300';
+        } else {
+          driveSpeed -= 11 * dt;
+          driveStatus.textContent = 'Reversing';
+          driveStatus.className = 'font-bold text-fuchsia-300';
+        }
+      } else if (controls.handbrake) {
+        driveSpeed *= Math.pow(0.12, dt * 5);
+        if (Math.abs(driveSpeed) < 0.08) driveSpeed = 0;
+        driveStatus.textContent = 'Handbrake';
+        driveStatus.className = 'font-bold text-red-300';
+      } else {
+        driveSpeed *= Math.pow(0.975, dt * 60);
+        if (Math.abs(driveSpeed) < 0.04) driveSpeed = 0;
+        driveStatus.textContent = driveSpeed === 0 ? 'Idle' : 'Coasting';
+        driveStatus.className = 'font-bold text-white';
+      }
+
+      driveSpeed = clamp(driveSpeed, -10, 30);
+
+      const keyboardSteer = (controls.left ? -1 : 0) + (controls.right ? 1 : 0);
       const steerInput = keyboardSteer !== 0 ? keyboardSteer : (serialConnected ? potentiometerSteer : 0);
-      const speed = horizontalSpeed();
-      const localForward = new THREE.Vector3(0, 0, -1).applyAxisAngle(new THREE.Vector3(0, 1, 0), playerYaw);
-      const signedForwardSpeed = playerBody.velocity.x * localForward.x + playerBody.velocity.z * localForward.z;
+      const speedRatio = clamp(Math.abs(driveSpeed) / 5, 0.18, 1);
+      const reverseDirection = driveSpeed < -0.1 ? -1 : 1;
+      playerYaw += steerInput * speedRatio * reverseDirection * 1.55 * dt;
 
-      let throttle = 0;
-      let brake = false;
-      if (keys.has('ArrowUp')) throttle = 1;
-      if (keys.has('ArrowDown')) {
-        if (signedForwardSpeed > 1.5) brake = true;
-        else throttle = -0.58;
-      }
-      if (keys.has('Space')) brake = true;
+      const forwardX = -Math.sin(playerYaw);
+      const forwardZ = -Math.cos(playerYaw);
+      const targetVelocityX = forwardX * driveSpeed;
+      const targetVelocityZ = forwardZ * driveSpeed;
+      const response = 1 - Math.pow(0.0005, dt);
 
-      const steerStrength = clamp(speed / 5, 0.18, 1) * (signedForwardSpeed < -0.5 ? -1 : 1);
-      playerYaw += steerInput * steerStrength * 1.55 * dt;
+      playerBody.velocity.x += (targetVelocityX - playerBody.velocity.x) * response;
+      playerBody.velocity.z += (targetVelocityZ - playerBody.velocity.z) * response;
       playerBody.quaternion.setFromEuler(0, playerYaw, 0);
-      playerBody.angularVelocity.set(0, 0, 0);
-
-      if (throttle !== 0) {
-        const force = 7100 * throttle;
-        playerBody.force.x += localForward.x * force;
-        playerBody.force.z += localForward.z * force;
-      }
-
-      const drag = brake ? 0.82 : 0.992;
-      playerBody.velocity.x *= Math.pow(drag, dt * 60);
-      playerBody.velocity.z *= Math.pow(drag, dt * 60);
-      if (!keys.has('ArrowUp') && !keys.has('ArrowDown')) {
-        playerBody.velocity.x *= Math.pow(0.985, dt * 60);
-        playerBody.velocity.z *= Math.pow(0.985, dt * 60);
-      }
-
-      const maxForward = throttle < 0 ? 11 : 31;
-      const currentHorizontal = horizontalSpeed();
-      if (currentHorizontal > maxForward) {
-        const scale = maxForward / currentHorizontal;
-        playerBody.velocity.x *= scale;
-        playerBody.velocity.z *= scale;
-      }
-
-      // Extra upright protection prevents falling or flipping.
-      playerBody.angularFactor.set(0, 1, 0);
-      playerBody.angularVelocity.x = 0;
-      playerBody.angularVelocity.z = 0;
-      playerBody.quaternion.setFromEuler(0, playerYaw, 0);
+      playerBody.angularVelocity.setZero();
+      playerBody.wakeUp();
 
       if (keyboardSteer !== 0) {
         steeringElement.textContent = keyboardSteer < 0 ? 'Keyboard left' : 'Keyboard right';
@@ -770,7 +795,6 @@
     }
 
     function updateCamera(dt) {
-      // Car front is negative Z. Positive Z is therefore behind the car.
       const behind = new THREE.Vector3(0, 5.2, 11.5).applyQuaternion(playerModel.quaternion);
       const ahead = new THREE.Vector3(0, 1.0, -5.5).applyQuaternion(playerModel.quaternion);
       desiredCameraPosition.copy(playerModel.position).add(behind);
@@ -786,24 +810,22 @@
       requestAnimationFrame(animate);
       const dt = Math.min(clock.getDelta(), 1 / 24);
       const elapsed = clock.elapsedTime;
+
       updatePlayerControls(dt);
       updateTraffic(dt);
       updatePedestrians(dt, elapsed);
       physicsWorld.step(1 / 60, dt, 4);
 
-      // Upright recovery after collision or numerical instability.
-      if (Math.abs(playerBody.quaternion.x) > 0.02 || Math.abs(playerBody.quaternion.z) > 0.02) {
-        playerBody.quaternion.setFromEuler(0, playerYaw, 0);
-        playerBody.angularVelocity.x = 0;
-        playerBody.angularVelocity.z = 0;
-      }
+      // Fixed rotation plus an explicit yaw reset keeps the vehicle upright.
+      playerBody.quaternion.setFromEuler(0, playerYaw, 0);
+      playerBody.angularVelocity.setZero();
 
       syncPlayerVisual();
       updateCamera(dt);
       updateFoam(dt);
       riverUniforms.time.value = elapsed;
       waterfallUniforms.time.value = elapsed;
-      speedElement.textContent = `${Math.round(horizontalSpeed() * 3.6)} km/h`;
+      speedElement.textContent = `${Math.round(Math.abs(driveSpeed) * 3.6)} km/h`;
 
       if (impactTimer > 0) {
         impactTimer -= dt;
