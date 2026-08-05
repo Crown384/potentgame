@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Arduino HDMI Pong - Extreme Edition</title>
+    <style>
+        body { 
+            background: #111; 
+            color: white; 
+            font-family: 'Courier New', Courier, monospace; 
+            text-align: center; 
+            margin: 0; 
+            overflow: hidden; 
+        }
+        canvas { 
+            background: #111; 
+            display: block; 
+            margin: 20px auto; 
+            border: 4px solid #fff; 
+            box-shadow: 0 0 30px rgba(0, 255, 204, 0.2); 
+        }
+        button { 
+            padding: 15px 30px; 
+            font-size: 18px; 
+            font-weight: bold; 
+            color: #111;
+            background: #00ffcc; 
+            border: none; 
+            border-radius: 5px; 
+            cursor: pointer; 
+            margin-top: 15px; 
+            box-shadow: 0 0 15px #00ffcc;
+            transition: 0.2s;
+        }
+        button:hover { 
+            background: #fff; 
+            box-shadow: 0 0 25px #fff;
+        }
+    </style>
+</head>
+<body>
+
+    <h2>ARDUINO PONG: HDMI EDITION</h2>
+    <button id="connectBtn">🔌 CONNECT ARDUINO NANO</button>
+    <canvas id="gameCanvas" width="800" height="500"></canvas>
+
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+        const connectBtn = document.getElementById("connectBtn");
+
+        // Player Paddle Settings
+        let paddleY = 200;
+        const paddleWidth = 15;
+        const paddleHeight = 90;
+        
+        // AI Opponent Settings
+        let aiY = 200;
+        const aiHeight = 90;
+
+        // Ball Settings
+        let ballX = 400, ballY = 250;
+        let ballSpeedX = -5, ballSpeedY = 3; 
+        const ballSize = 10;
+        
+        // Scoring and Progression
+        let score = 0;
+
+        // Sound System Engine (Plays retro 8-bit blips through your TV/PC speakers)
+        function playTone(freq, duration) {
+            try {
+                let audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                let oscillator = audioCtx.createOscillator();
+                let gainNode = audioCtx.createGain();
+                oscillator.connect(gainNode);
+                gainNode.connect(audioCtx.destination);
+                oscillator.frequency.value = freq;
+                oscillator.type = 'square'; 
+                oscillator.start();
+                gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
+                oscillator.stop(audioCtx.currentTime + duration);
+            } catch(e) { /* Audio Context block fallback */ }
+        }
+
+        // Web Serial Framework: Bridges the Arduino Nano to the Web Browser
+        connectBtn.addEventListener("click", async () => {
+            try {
+                const port = await navigator.serial.requestPort();
+                await port.open({ baudRate: 9600 });
+                connectBtn.style.display = "none"; 
+                
+                const textDecoder = new TextDecoderStream();
+                const readableStreamClosed = port.readable.pipeTo(textDecoder.writable);
+                const reader = textDecoder.readable.getReader();
+
+                let buffer = "";
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+                    
+                    buffer += value;
+                    let lines = buffer.split("\r\n");
+                    buffer = lines.pop(); 
+
+                    for (let line of lines) {
+                        let cleanLine = line.trim();
+                        if (cleanLine.length > 0) {
+                            let potVal = parseInt(cleanLine);
+                            if (!isNaN(potVal)) {
+                                // Maps the Arduino Nano's analog knob data to the screen canvas limits
+                                paddleY = (potVal / 1023) * (canvas.height - paddleHeight);
+                            }
+                        }
+                    }
+                }
+            } catch (error) {
+                alert("Serial Connection Failed: " + error);
+            }
+        });
+
+        // Frame Logic and Visual Processing Engine
+        function gameLoop() {
+            // Apply physics tracking to the ball positions
+            ballX += ballSpeedX;
+            ballY += ballSpeedY;
+
+            // --- DIFFICULTY CONTROL SCALING ---
+            // The computer bot starts with an baseline speed tracking performance of 3.5
+            // Every point you earn adds an extra 0.5 acceleration to its movement
+            let dynamicAiSpeed = 3.5 + (score * 0.5); 
+            if (dynamicAiSpeed > 12.5) dynamicAiSpeed = 12.5; // Upper tracking boundary cap
+
+            // AI AI tracking engine: Evaluates and targets center vertical ball paths
+            let aiTarget = ballY - (aiHeight / 2);
+            if (aiY < aiTarget) aiY += dynamicAiSpeed;
+            else if (aiY > aiTarget) aiY -= dynamicAiSpeed;
+            
+            // Constrain AI within walls
+            if (aiY < 0) aiY = 0;
+            if (aiY > canvas.height - aiHeight) aiY = canvas.height - aiHeight;
+
+            // Boundary Detection: Screen Top & Bottom walls
+            if (ballY - ballSize <= 0 || ballY + ballSize >= canvas.height) {
+                ballSpeedY *= -1;
+                playTone(220, 0.05); // Play deep bounce tone
+            }
+            
+            // Solid Physics Collision Fix: Bot Paddle (Right Screen Side)
+            if (ballX + ballSize >= canvas.width - 25 && ballX - ballSize <= canvas.width - 25 + paddleWidth) {
+                if (ballY + ballSize >= aiY && ballY - ballSize <= aiY + aiHeight) {
+                    ballSpeedX = -Math.abs(ballSpeedX); // Mirror direction flawlessly LEFT
+                    playTone(320, 0.08); 
+                }
+            }
+
+            // Solid Physics Collision Fix: Player Paddle (Left Screen Side)
+            if (ballX - ballSize <= 10 + paddleWidth && ballX + ballSize >= 10) {
+                if (ballY + ballSize >= paddleY && ballY - ballSize <= paddleY + paddleHeight) {
+                    
+                    // SPIN CALCULATION: Checks exactly where the ball structural landing happened
+                    let relativeIntersectY = (paddleY + (paddleHeight / 2)) - ballY;
+                    let normalizedIntersectY = (relativeIntersectY / (paddleHeight / 2));
+                    
+                    // Angling physics shifts and intensifies based on your climbing score
+                    ballSpeedY = -normalizedIntersectY * (4.5 + score * 0.25); 
+
+                    score++; // Progress point incremented
+
+                    // INCREASING DIFFICULTY: Ramps up raw horizontal velocity vector speed
+                    let newSpeed = 5 + (score * 0.7);
+                    ballSpeedX = Math.abs(newSpeed); // Force movement RIGHT at new high velocity
+                    
+                    playTone(580, 0.08); // Sharp victory hit tone
+                }
+            }
+
+            // Game Event Check: Ball bypasses the automated AI player
+            if (ballX > canvas.width) {
+                score += 2; // Award sweet progression score boost
+                playTone(880, 0.25); // Score notification signal tone
+                resetBall(-5); 
+            }
+
+            // Game Event Check: Ball drops past your custom potentiometer paddle
+            if (ballX < 0) {
+                playTone(130, 0.4); // Failure feedback signal buzzer tone
+                score = 0; // Total difficulty configuration drop down to level 1
+                resetBall(-5); 
+            }
+
+            // Position state resetting utility
+            function resetBall(startingXSpeed) {
+                ballX = canvas.width / 2;
+                ballY = canvas.height / 2;
+                ballSpeedX = startingXSpeed;
+                ballSpeedY = (Math.random() > 0.5 ? 3.5 : -3.5); // Adds vertical direction randomness
+            }
+
+            // --- GRAPHICS AND INTERACTIVE RENDERING ---
+            // Semi-transparent redraw loop creates standard retro tracking ghost trail trails
+            ctx.fillStyle = "rgba(17, 17, 17, 0.25)"; 
+            ctx.fillRect(0, 0, canvas.width, canvas.height); 
+
+            // Draw Player Paddle (Pure Solid Crisp White)
+            ctx.fillStyle = "#ffffff";
+            ctx.fillRect(10, paddleY, paddleWidth, paddleHeight);
+
+            // Draw AI System Enemy Paddle (Vibrant Neon Cyan)
+            ctx.fillStyle = "#00ffcc";
+            ctx.fillRect(canvas.width - 25, aiY, paddleWidth, aiHeight);
+
+            // Draw Target Ball (Electric Pink)
+            ctx.fillStyle = "#ff0055";
+            ctx.beginPath();
+            ctx.arc(ballX, ballY, ballSize, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Render HUD Dash Details
+            ctx.fillStyle = "#ffffff";
+            ctx.font = "18px 'Courier New'";
+            ctx.fillText("SCORE: " + score, 30, 35);
+            ctx.fillText("DIFFICULTY: LVL " + (1 + Math.floor(score/3)), canvas.width - 240, 35);
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Initialize engine framework loops
+        gameLoop(); 
+    </script>
+</body>
+</html>
